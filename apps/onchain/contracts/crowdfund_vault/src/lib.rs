@@ -217,6 +217,13 @@ impl CrowdfundVaultContract {
         let count_key = DataKey::ContributorCount(project_id);
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
 
+        // Check if we need to divest funds before refunding
+        let invested_key = DataKey::ProjectInvestedBalance(project_id);
+        let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+        if current_invested > 0 {
+            Self::divest_funds_internal(&env, project_id, current_invested)?;
+        }
+
         let contract_address = env.current_contract_address();
         let token_client = TokenClient::new(&env, &project.token_address);
 
@@ -1000,6 +1007,10 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::Project(project_id))
             .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
 
         let stored_admin: Address = env
             .storage()

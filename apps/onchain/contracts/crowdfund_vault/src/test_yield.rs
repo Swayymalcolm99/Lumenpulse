@@ -138,3 +138,44 @@ fn test_yield_investment_and_withdrawal() {
     // But there's still 100_000 invested.
     assert_eq!(token_client.balance(&client.address), 0);
 }
+
+#[test]
+fn test_yield_refund_divests_automatically() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, yield_id) = setup_yield_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Set yield provider
+    client.set_yield_provider(&admin, &token_client.address, &yield_id);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("YieldPrj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    client.deposit(&user, &project_id, &500_000);
+
+    // Invest ALL funds
+    client.invest_idle_funds(&owner, &project_id, &500_000);
+
+    // Contract balance is 0
+    assert_eq!(token_client.balance(&client.address), 0);
+
+    // Cancel project
+    client.cancel_project(&owner, &project_id);
+
+    // Refund contributors (requires auto-divest)
+    client.refund_contributors(&project_id, &user);
+
+    // Verify user got their tokens back
+    // User started with 10_000_000, deposited 500_000, should have 10_000_000 again.
+    assert_eq!(token_client.balance(&user), 10_000_000);
+}
