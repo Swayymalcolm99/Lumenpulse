@@ -332,3 +332,54 @@ async def model_status(request_context: Request) -> ModelStatusResponse:
         last_run=get_last_run_status(),
         registry=get_registry_status(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Predictive analytics endpoint (forecast market trends)
+# ---------------------------------------------------------------------------
+
+
+class ForecastResponse(BaseModel):
+    predicted_trend_24h: str
+    predicted_trend_48h: str
+    confidence_24h: float
+    confidence_48h: float
+    sentiment_velocity: float
+    forecast_score_24h: float
+    forecast_score_48h: float
+    model_backend: str
+    data_points_used: int
+    generated_at: str
+
+
+@app.get("/analytics/forecast", response_model=ForecastResponse)
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_forecast(request_context: Request) -> ForecastResponse:
+    """
+    Predict market trends (Bullish / Bearish / Neutral) for the next 24-48 hours.
+
+    Uses historical sentiment data from *analytics.jsonl* to train a
+    SentimentForecaster (Prophet when installed, sklearn Ridge otherwise)
+    and returns predicted health scores together with a Sentiment Velocity
+    value that measures how fast the market mood is changing.
+
+    Requires X-API-Key header.
+    """
+    import asyncio
+
+    logger.info(f"Forecast requested | client_ip={request_context.client.host}")
+
+    def _run_forecast():
+        from src.analytics.forecaster import SentimentForecaster
+
+        forecaster = SentimentForecaster()
+        return forecaster.run()
+
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _run_forecast)
+    except Exception as exc:
+        logger.error(f"Forecast failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Forecast error: {exc}")
+
+    return ForecastResponse(**result.to_dict())
