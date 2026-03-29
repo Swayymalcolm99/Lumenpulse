@@ -5,7 +5,7 @@ for the Node.js backend to consume.
 
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -190,7 +190,7 @@ async def health_check(request: Request) -> HealthResponse:
 @app.get("/news", response_model=List[NewsArticleResponse])
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_news(
-    request_context: Request,
+    request: Request,
     limit: int = Query(50, ge=1, le=500),
     hours: int = Query(24, ge=1, le=168),
     asset: Optional[str] = Query(None, description="Optional primary asset code filter"),
@@ -217,7 +217,7 @@ async def get_news(
             hours,
             asset,
             entity,
-            request_context.client.host,
+            request.client.host,
         )
 
         def _build_indicator(
@@ -257,7 +257,7 @@ async def get_news(
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("50/minute") if limiter else lambda x: x
-async def analyze_text(request: AnalyzeRequest, request_context: Request) -> AnalyzeResponse:
+async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """
     Analyze the sentiment of provided text.
 
@@ -274,15 +274,15 @@ async def analyze_text(request: AnalyzeRequest, request_context: Request) -> Ana
     """
     try:
         # Validate input
-        if not request.text or not request.text.strip():
+        if not body.text or not body.text.strip():
             raise HTTPException(status_code=400, detail="Text cannot be empty")
 
         # Use your existing SentimentAnalyzer with asset filter
-        result = sentiment_analyzer.analyze(request.text, request.asset)
+        result = sentiment_analyzer.analyze(body.text, body.asset)
 
         logger.info(
-            f"Analyzed text: '{request.text[:50]}...' -> sentiment: {result.compound_score} | "
-            f"asset: {request.asset} | client_ip: {request_context.client.host}"
+            f"Analyzed text: '{body.text[:50]}...' -> sentiment: {result.compound_score} | "
+            f"asset: {body.asset} | client_ip: {request.client.host}"
         )
 
         # Build visual indicator
@@ -306,7 +306,7 @@ async def analyze_text(request: AnalyzeRequest, request_context: Request) -> Ana
 @app.get("/analyze", response_model=AssetAnalysisResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_asset_analysis(
-    request_context: Request, 
+    request: Request,
     asset: str = Query(..., description="Asset code (e.g., XLM, USDC, BTC)")
 ) -> AssetAnalysisResponse:
     """
@@ -331,7 +331,7 @@ async def get_asset_analysis(
         # In a real implementation, this would query the database for recent sentiment data
         # related to the specific asset
         
-        logger.info(f"Requested asset analysis for: {asset} | client_ip: {request_context.client.host}")
+        logger.info(f"Requested asset analysis for: {asset} | client_ip: {request.client.host}")
         
         # Mock response - replace with actual database query
         mock_score = 0.0
@@ -356,7 +356,7 @@ async def get_asset_analysis(
 # Optional: Batch analysis endpoint if needed
 @app.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
-async def analyze_batch(request_context: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
+async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
     """Batch analyze multiple texts with optional asset filter"""
     try:
         if not texts:
@@ -439,7 +439,7 @@ class ModelStatusResponse(BaseModel):
 @limiter.limit("5/minute") if limiter else lambda x: x
 async def trigger_retraining(
     body: RetrainRequest,
-    request_context: Request,
+    request: Request,
 ) -> RetrainResponse:
     """
     Trigger an immediate model retraining run.
@@ -454,7 +454,7 @@ async def trigger_retraining(
 
     logger.info(
         f"Retraining triggered via API | force={body.force} | "
-        f"client_ip={request_context.client.host}"
+        f"client_ip={request.client.host}"
     )
 
     loop = asyncio.get_event_loop()
@@ -467,7 +467,7 @@ async def trigger_retraining(
 
 @app.get("/model/status", response_model=ModelStatusResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
-async def model_status(request_context: Request) -> ModelStatusResponse:
+async def model_status(request: Request) -> ModelStatusResponse:
     """
     Return the current model registry state and last retraining run metadata.
 
@@ -485,6 +485,8 @@ async def model_status(request_context: Request) -> ModelStatusResponse:
 
 
 class ForecastResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     predicted_trend_24h: str
     predicted_trend_48h: str
     confidence_24h: float
@@ -499,7 +501,7 @@ class ForecastResponse(BaseModel):
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
-async def get_forecast(request_context: Request) -> ForecastResponse:
+async def get_forecast(request: Request) -> ForecastResponse:
     """
     Predict market trends (Bullish / Bearish / Neutral) for the next 24-48 hours.
 
@@ -512,7 +514,7 @@ async def get_forecast(request_context: Request) -> ForecastResponse:
     """
     import asyncio
 
-    logger.info(f"Forecast requested | client_ip={request_context.client.host}")
+    logger.info(f"Forecast requested | client_ip={request.client.host}")
 
     def _run_forecast():
         from src.analytics.forecaster import SentimentForecaster
@@ -576,7 +578,7 @@ class LagAnalysisResponse(BaseModel):
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def analyze_correlation(
     body: CorrelationRequest,
-    request_context: Request,
+    request: Request,
 ) -> CorrelationResponse:
     """
     Analyze correlation between sentiment and price/volume data.
@@ -599,7 +601,7 @@ async def analyze_correlation(
     logger.info(
         f"Correlation analysis requested | sentiment_points={len(sentiment_list)} | "
         f"price_points={len(price_list)} | volume_points={len(volume_list)} | "
-        f"lag_hours={body.lag_hours} | client_ip={request_context.client.host}"
+        f"lag_hours={body.lag_hours} | client_ip={request.client.host}"
     )
 
     result = CorrelationEngine.full_analysis(
@@ -620,7 +622,7 @@ async def analyze_correlation(
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_lag_correlation(
     body: LagAnalysisRequest,
-    request_context: Request,
+    request: Request,
 ) -> LagAnalysisResponse:
     """
     Analyze correlation across multiple time lags to find optimal lead time.
@@ -633,7 +635,7 @@ async def analyze_lag_correlation(
 
     logger.info(
         f"Lag correlation analysis | metric_type={body.metric_type} | "
-        f"max_lag={body.max_lag_hours}h | client_ip={request_context.client.host}"
+        f"max_lag={body.max_lag_hours}h | client_ip={request.client.host}"
     )
 
     result = CorrelationEngine.analyze_with_lags(
