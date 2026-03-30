@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { MulterModule } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,6 +27,9 @@ import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
+import { UploadModule } from './upload/upload.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -53,7 +58,12 @@ import { TestController } from './test/test.controller';
         limit: 100,
       },
     ]),
-
+    MulterModule.register({
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
     AppCacheModule,
     MetricsModule,
     SentimentModule,
@@ -62,6 +72,9 @@ import { TestController } from './test/test.controller';
     PriceModule,
     NotificationModule,
     WebhookModule,
+    UploadModule,
+    AuthModule,
+    UsersModule,
     QueueModule,
     StellarSyncModule,
     ExchangeRatesModule,
