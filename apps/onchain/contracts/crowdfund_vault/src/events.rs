@@ -79,6 +79,7 @@ pub struct ContractUnpauseEvent {
 
 /// Emitted when the contract WASM is upgraded to a new hash.
 #[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpgradedEvent {
     #[topic]
     pub admin: Address,
@@ -87,6 +88,7 @@ pub struct UpgradedEvent {
 
 /// Emitted when the admin role is transferred to a new address.
 #[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminChangedEvent {
     #[topic]
     pub old_admin: Address,
@@ -94,15 +96,25 @@ pub struct AdminChangedEvent {
 }
 
 #[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectCanceledEvent {
     pub project_id: u64,
     pub caller: Address,
 }
 
 #[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContributionRefundedEvent {
     pub project_id: u64,
     pub contributor: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributorPayoutEvent {
+    #[topic]
+    pub recipient: Address,
     pub amount: i128,
 }
 

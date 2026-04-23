@@ -971,6 +971,35 @@ impl CrowdfundVaultContract {
         Ok(())
     }
 
+    /// Fund the reward pool (admin only)
+    pub fn fund_reward_pool(
+        env: Env,
+        admin: Address,
+        token_address: Address,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        // Verify admin (single check with helper)
+        Self::verify_admin(&env, &admin)?;
+
+        // Validate amount
+        if amount <= 0 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        // Transfer tokens from admin into the contract
+        let contract_address = env.current_contract_address();
+        token::transfer(&env, &token_address, &admin, &contract_address, &amount);
+
+        // Update reward pool balance
+        let pool_key = DataKey::RewardPool(token_address);
+        let current_pool: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&pool_key, &(current_pool + amount));
+
+        Ok(())
+    }
+
     /// Calculate matching funds for a project using quadratic funding formula
     /// Formula: (sum of sqrt(contributions))^2
     /// Returns the amount of matching funds based on number of unique contributors and amounts
@@ -1137,6 +1166,86 @@ impl CrowdfundVaultContract {
 
         let pool_key = DataKey::MatchingPool(token_address);
         Ok(env.storage().persistent().get(&pool_key).unwrap_or(0))
+    }
+
+    /// Get reward pool balance for a token
+    pub fn get_reward_pool_balance(
+        env: Env,
+        token_address: Address,
+    ) -> Result<i128, CrowdfundError> {
+        // Check if contract is initialized
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(CrowdfundError::NotInitialized);
+        }
+
+        let pool_key = DataKey::RewardPool(token_address);
+        Ok(env.storage().persistent().get(&pool_key).unwrap_or(0))
+    }
+
+    /// Batch payout tokens to multiple contributors (admin only)
+    /// Transfers tokens from the reward pool to each recipient.
+    pub fn batch_payout(
+        env: Env,
+        admin: Address,
+        token_address: Address,
+        recipients: Vec<(Address, i128)>,
+    ) -> Result<(), CrowdfundError> {
+        // Verify admin (single check with helper)
+        Self::verify_admin(&env, &admin)?;
+
+        // Check Emergency Pause State (single read)
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        // Validate recipients list
+        if recipients.is_empty() {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        let contract_address = env.current_contract_address();
+
+        // Calculate total amount to be paid out and validate recipients
+        let mut total_amount: i128 = 0;
+        for tuple in recipients.iter() {
+            let recipient = &tuple.0;
+            let amount = &tuple.1;
+            if *amount <= 0 {
+                return Err(CrowdfundError::InvalidAmount);
+            }
+            if *recipient == contract_address {
+                return Err(CrowdfundError::InvalidRecipient);
+            }
+            total_amount = total_amount
+                .checked_add(*amount)
+                .ok_or(CrowdfundError::InvalidAmount)?;
+        }
+
+        // Check reward pool balance
+        let pool_key = DataKey::RewardPool(token_address.clone());
+        let pool_balance: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
+        if pool_balance < total_amount {
+            return Err(CrowdfundError::InsufficientBalance);
+        }
+
+        // Transfer tokens to each recipient
+        for (recipient, amount) in recipients {
+            token::transfer(&env, &token_address, &contract_address, &recipient, &amount);
+            events::ContributorPayoutEvent { recipient, amount }.publish(&env);
+        }
+
+        // Update reward pool balance
+        let new_pool_balance = pool_balance
+            .checked_sub(total_amount)
+            .ok_or(CrowdfundError::InvalidAmount)?;
+        env.storage().persistent().set(&pool_key, &new_pool_balance);
+
+        Ok(())
     }
 
     /// Get contribution amount for a specific user and project
