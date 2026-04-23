@@ -14,6 +14,7 @@ import {
   requestAccess,
 } from "@stellar/freighter-api";
 import { OnboardingProvider as OnboardingP } from "@/lib/onboarding";
+import { ThemeProvider } from "@/components/theme-provider";
 
 interface StellarWalletState {
   publicKey: string | null;
@@ -130,9 +131,11 @@ export function Providers({ children }: { children: ReactNode }) {
       storageKey="lumenpulse-theme-preference"
       enableTransitions={true}
     >
-      <StellarProvider>
-        {children}
-      </StellarProvider>
+      <OnboardingP>
+        <StellarProvider>
+          {children}
+        </StellarProvider>
+      </OnboardingP>
     </ThemeProvider>
   );
 }

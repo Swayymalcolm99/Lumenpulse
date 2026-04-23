@@ -2,11 +2,42 @@
 
 import { useState } from "react";
 import { Wallet, Copy, ExternalLink, Check, LogOut } from "lucide-react";
+import { useStellarWallet } from "@/app/providers";
+import { cn } from "@/lib/utils";
 
 interface AccountSummaryProps {
   address: string;
   network?: "testnet" | "mainnet";
   onDisconnect: () => void;
+}
+
+export function WalletButton({ className }: { className?: string }) {
+  const { publicKey, status, connect, disconnect } = useStellarWallet();
+
+  if (status === "connected" && publicKey) {
+    return (
+      <AccountSummary
+        address={publicKey}
+        onDisconnect={disconnect}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={connect}
+      disabled={status === "connecting"}
+      className={cn(
+        "relative rounded-lg px-4 py-2 font-medium flex items-center gap-2 transition-all duration-300",
+        "bg-primary text-primary-foreground hover:opacity-90",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        className
+      )}
+    >
+      <Wallet className="w-4 h-4" />
+      {status === "connecting" ? "Connecting..." : "Connect Wallet"}
+    </button>
+  );
 }
 
 export function AccountSummary({
