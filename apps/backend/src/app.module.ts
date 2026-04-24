@@ -39,7 +39,7 @@ import { TestController } from './test/test.controller';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { HealthModule } from './health/health.module';
+import { GrantsModule } from './grants/grants.module';
 
 @Module({
   imports: [
@@ -98,6 +98,7 @@ import { HealthModule } from './health/health.module';
     QueueModule,
     StellarSyncModule,
     ExchangeRatesModule,
+    GrantsModule,
     WatchlistModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
