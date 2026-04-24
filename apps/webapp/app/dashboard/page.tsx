@@ -16,23 +16,15 @@ export default function DashboardPage() {
     issuer?: string;
     balance: string;
   } | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
-    const authToken = document.cookie.includes("auth-token");
-
-    if (!authToken) {
-      router.push("/auth/login?callbackUrl=/dashboard");
-      return;
-    }
-
     // TODO: replace this with real user wallet later
     // For now, we simulate "no wallet connected"
     // In a real app, we would fetch the public key from the session/profile
     setPublicKey(null);
 
     setIsLoading(false);
-  }, [router]);
+  }, []);
 
   if (isLoading) {
     return (
@@ -88,25 +80,26 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Other cards */}
-            <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
-              <h2 className="text-xl font-semibold mb-4">Portfolio Overview</h2>
-              <p className="text-gray-400">
-                Your portfolio statistics will appear here.
-              </p>
-              <div className="mt-4 h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-                <div className="bg-blue-500 h-full w-[65%]"></div>
+              <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
+                <h2 className="text-xl font-semibold mb-4">
+                  Portfolio Overview
+                </h2>
+                <p className="text-gray-400">
+                  Your portfolio statistics will appear here.
+                </p>
+                <div className="mt-4 h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+                  <div className="bg-blue-500 h-full w-[65%]"></div>
+                </div>
               </div>
-            </div>
 
-            <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
-              <h2 className="text-xl font-semibold mb-4">
-                Recent Transactions
-              </h2>
-              <p className="text-gray-400">
-                Your transactions will appear here.
-              </p>
-            </div>
+              <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
+                <h2 className="text-xl font-semibold mb-4">
+                  Recent Transactions
+                </h2>
+                <p className="text-gray-400">
+                  Your transactions will appear here.
+                </p>
+              </div>
 
             <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
               <h2 className="text-xl font-semibold mb-4">Market Insights</h2>
