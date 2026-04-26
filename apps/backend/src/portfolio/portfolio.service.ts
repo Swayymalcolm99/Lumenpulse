@@ -23,6 +23,7 @@ import { calculatePortfolioPerformance } from './utils/portfolio-performance.uti
 import { PortfolioSnapshotQueueService } from './queue/portfolio-snapshot.queue.service';
 import { PortfolioSnapshotBatchStatus } from './queue/portfolio-snapshot.types';
 import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
+import { MaterializedSnapshotService } from './materialized-snapshot.service';
 
 @Injectable()
 export class PortfolioService {
@@ -40,6 +41,7 @@ export class PortfolioService {
     private readonly stellarService: StellarService,
     private readonly priceService: PriceService,
     private readonly snapshotQueueService: PortfolioSnapshotQueueService,
+    private readonly materializedSnapshotService: MaterializedSnapshotService,
   ) {}
 
   /**
@@ -121,7 +123,38 @@ export class PortfolioService {
       totalValueUsd: totalValueUsd.toFixed(2),
     });
 
-    return await this.snapshotRepository.save(snapshot);
+    const savedSnapshot = await this.snapshotRepository.save(snapshot);
+
+    // Update materialized snapshot for fast reads
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['stellarAccounts'],
+      });
+      const hasLinkedAccount =
+        user?.stellarAccounts && user.stellarAccounts.length > 0;
+
+      const allocation =
+        this.materializedSnapshotService.computeAllocation(assetBalances);
+
+      await this.materializedSnapshotService.upsertForUser({
+        userId,
+        totalValueUsd: savedSnapshot.totalValueUsd,
+        assetBalances,
+        assetAllocation: allocation,
+        hasLinkedAccount: !!hasLinkedAccount,
+        sourceSnapshotId: savedSnapshot.id,
+      });
+    } catch (error: unknown) {
+      // Log but don't fail the snapshot creation if materialization fails
+      this.logger.warn(
+        `Failed to update materialized snapshot for user ${userId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
+
+    return savedSnapshot;
   }
 
   /**
@@ -159,15 +192,29 @@ export class PortfolioService {
   }
 
   /**
-   * Get portfolio summary (latest snapshot) for the mobile dashboard
-   * Returns total USD value and individual asset balances
+   * Get portfolio summary (latest snapshot) for the mobile dashboard.
+   * Uses the materialized snapshot for fast reads — falls back to
+   * querying portfolio_snapshots if no materialized row exists yet.
    */
   async getPortfolioSummary(
     userId: string,
   ): Promise<PortfolioSummaryResponseDto> {
     this.logger.log(`Fetching portfolio summary for user ${userId}`);
 
-    // Check if user has any linked Stellar accounts
+    // Fast path: read from materialized snapshot (O(1) by userId index)
+    const materialized =
+      await this.materializedSnapshotService.getForUser(userId);
+
+    if (materialized) {
+      return {
+        totalValueUsd: materialized.totalValueUsd,
+        assets: materialized.assetBalances,
+        lastUpdated: materialized.updatedAt,
+        hasLinkedAccount: materialized.hasLinkedAccount,
+      };
+    }
+
+    // Fallback: compute from raw data (first-time access or migration in progress)
     const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['stellarAccounts'],
@@ -193,13 +240,34 @@ export class PortfolioService {
     });
 
     if (!latestSnapshot) {
-      // User has accounts but no snapshot yet
       return {
         totalValueUsd: '0.00',
         assets: [],
         lastUpdated: null,
-        hasLinkedAccount: true, // Important: set to true even without snapshot
+        hasLinkedAccount: true,
       };
+    }
+
+    // Populate materialized snapshot for future fast reads
+    try {
+      const allocation =
+        this.materializedSnapshotService.computeAllocation(
+          latestSnapshot.assetBalances,
+        );
+      await this.materializedSnapshotService.upsertForUser({
+        userId,
+        totalValueUsd: latestSnapshot.totalValueUsd,
+        assetBalances: latestSnapshot.assetBalances,
+        assetAllocation: allocation,
+        hasLinkedAccount: true,
+        sourceSnapshotId: latestSnapshot.id,
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Failed to backfill materialized snapshot for user ${userId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
     }
 
     return {
@@ -326,6 +394,54 @@ export class PortfolioService {
   }
 
   /**
+   * Scheduled job to refresh materialized snapshots.
+   * Runs every 6 hours to catch any users whose materialized snapshot
+   * might be stale (e.g. if the materialized upsert failed during
+   * snapshot creation).
+   */
+  @Cron('0 */6 * * *', { name: 'materialized-snapshot-refresh' })
+  async refreshMaterializedSnapshots(): Promise<void> {
+    this.logger.log('Starting scheduled materialized snapshot refresh');
+    try {
+      // Refresh materialized snapshots for users that have snapshots
+      // but no materialized row (migration gap or upsert failure)
+      const staleUsers = await this.snapshotRepository
+        .createQueryBuilder('ps')
+        .select('ps.userId', 'userId')
+        .groupBy('ps.userId')
+        .having(
+          'ps.userId NOT IN (SELECT "userId" FROM portfolio_materialized_snapshots)',
+        )
+        .getRawMany();
+
+      let refreshed = 0;
+      for (const { userId } of staleUsers) {
+        try {
+          const didRefresh =
+            await this.materializedSnapshotService.refreshForUser(userId);
+          if (didRefresh) refreshed++;
+        } catch (error: unknown) {
+          this.logger.warn(
+            `Failed to refresh materialized snapshot for user ${userId}: ${
+              error instanceof Error ? error.message : 'Unknown error'
+           }`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `Materialized snapshot refresh complete. Refreshed ${refreshed} users.`,
+      );
+    } catch (error: unknown) {
+      this.logger.error(
+        `Materialized snapshot refresh failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
+  }
+
+  /**
    * Manual trigger for creating snapshots (useful for testing)
    */
   async triggerSnapshotCreation(): Promise<PortfolioSnapshotBatchStatus> {
@@ -383,12 +499,9 @@ export class PortfolioService {
   /**
    * Get portfolio asset allocation breakdown.
    *
-   * Aggregates assets across all linked Stellar accounts for a user,
-   * calculates the USD value of each asset, and determines its percentage
-   * of the total portfolio value.
-   *
-   * @param userId The ID of the user.
-   * @returns An object with the total portfolio value and an array of assets with their allocation details.
+   * Uses the materialized snapshot for fast reads when available.
+   * Falls back to computing from Stellar network when no materialized
+   * row exists (first-time access or migration in progress).
    */
   async getAssetAllocation(userId: string): Promise<{
     totalValueUsd: number;
@@ -402,6 +515,18 @@ export class PortfolioService {
   }> {
     this.logger.log(`Fetching asset allocation for user ${userId}`);
 
+    // Fast path: read from materialized snapshot
+    const materialized =
+      await this.materializedSnapshotService.getForUser(userId);
+
+    if (materialized?.assetAllocation) {
+      return {
+        totalValueUsd: parseFloat(materialized.totalValueUsd),
+        allocation: materialized.assetAllocation,
+      };
+    }
+
+    // Fallback: compute from Stellar network (slow path)
     const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['stellarAccounts'],
