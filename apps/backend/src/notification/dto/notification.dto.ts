@@ -26,8 +26,3 @@ export class NotificationResponseDto {
   @ApiProperty()
   createdAt: Date;
 }
-
-export class MarkAsReadDto {
-  @ApiProperty()
-  read: boolean;
-}

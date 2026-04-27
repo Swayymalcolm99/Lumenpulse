@@ -16,7 +16,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
-import { NotificationResponseDto, MarkAsReadDto } from './dto/notification.dto';
+import { NotificationResponseDto } from './dto/notification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('notifications')
