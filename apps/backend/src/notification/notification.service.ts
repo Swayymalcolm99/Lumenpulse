@@ -51,4 +51,13 @@ export class NotificationService {
       .take(50)
       .getMany();
   }
+
+  async markAsRead(id: string, userId: string): Promise<void> {
+    await this.notificationRepository
+      .createQueryBuilder()
+      .update(Notification)
+      .set({ read: true })
+      .where('id = :id AND userId = :userId', { id, userId })
+      .execute();
+  }
 }
