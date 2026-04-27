@@ -1,4 +1,7 @@
+import { createRequire } from 'node:module';
+
 describe('fail-fast boot behavior', () => {
+  const requireFromHere = createRequire(__filename);
   const managedKeys = [
     'NODE_ENV',
     'ENVIRONMENT',
@@ -41,7 +44,7 @@ describe('fail-fast boot behavior', () => {
     }));
 
     expect(() => {
-      require('../main');
+      requireFromHere('../main');
     }).toThrow(/JWT_SECRET/);
 
     expect(createMock).not.toHaveBeenCalled();

@@ -1,4 +1,5 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { inspect } from 'node:util';
@@ -37,9 +38,15 @@ const resetManagedEnv = (values: Record<string, string | undefined>) => {
   }
 };
 
-const importFreshConfigModule = async () => {
+const requireFromHere = createRequire(__filename);
+
+const importFreshConfigModule = async (): Promise<
+  typeof import('./config')
+> => {
   jest.resetModules();
-  return Promise.resolve(require('./config'));
+  await Promise.resolve();
+  const configModule = requireFromHere('./config') as typeof import('./config');
+  return configModule;
 };
 
 describe('config validation', () => {
@@ -216,7 +223,10 @@ describe('environment-specific loading', () => {
 
   it('warns in production when .env file exists and does not throw', async () => {
     const tempDir = mkdtempSync(path.join(tmpdir(), 'lumenpulse-config-prod-'));
-    writeFileSync(path.join(tempDir, '.env'), 'JWT_SECRET=should-not-be-used\n');
+    writeFileSync(
+      path.join(tempDir, '.env'),
+      'JWT_SECRET=should-not-be-used\n',
+    );
 
     resetManagedEnv({
       ...REQUIRED_ENV,

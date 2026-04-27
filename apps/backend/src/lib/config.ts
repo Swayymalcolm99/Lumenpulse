@@ -312,13 +312,13 @@ const envSchema = z
 
     RATE_LIMIT_PORTFOLIO_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_PORTFOLIO_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_PORTFOLIO_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
-
-    RATE_LIMIT_PORTFOLIO_WRITE_LIMIT: z.coerce
+    RATE_LIMIT_PORTFOLIO_READ_BLOCK_MS: z.coerce
       .number()
       .int()
       .min(1)
       .optional(),
+
+    RATE_LIMIT_PORTFOLIO_WRITE_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_PORTFOLIO_WRITE_TTL_MS: z.coerce
       .number()
       .int()
@@ -332,13 +332,13 @@ const envSchema = z
 
     RATE_LIMIT_WATCHLIST_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_WATCHLIST_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_WATCHLIST_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
-
-    RATE_LIMIT_WATCHLIST_WRITE_LIMIT: z.coerce
+    RATE_LIMIT_WATCHLIST_READ_BLOCK_MS: z.coerce
       .number()
       .int()
       .min(1)
       .optional(),
+
+    RATE_LIMIT_WATCHLIST_WRITE_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_WATCHLIST_WRITE_TTL_MS: z.coerce
       .number()
       .int()
@@ -378,10 +378,7 @@ const envSchema = z
     ),
 
     LOGGING_ENABLED: z.preprocess(parseBoolean, z.boolean().default(true)),
-    LOGGING_LEVEL: z
-      .enum(['log', 'warn', 'error'])
-      .default('log')
-      .optional(),
+    LOGGING_LEVEL: z.enum(['log', 'warn', 'error']).default('log').optional(),
     LOGGING_INCLUDE_BODY: z.preprocess(
       parseBoolean,
       z.boolean().default(false),
@@ -404,16 +401,8 @@ const envSchema = z
 
     FRONTEND_URL: z.string().trim().default('http://localhost:3000'),
 
-    PORTFOLIO_SNAPSHOT_CONCURRENCY: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .default(25),
-    PORTFOLIO_SNAPSHOT_BATCH_SIZE: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .default(500),
+    PORTFOLIO_SNAPSHOT_CONCURRENCY: z.coerce.number().int().min(1).default(25),
+    PORTFOLIO_SNAPSHOT_BATCH_SIZE: z.coerce.number().int().min(1).default(500),
     PORTFOLIO_SNAPSHOT_ATTEMPTS: z.coerce.number().int().min(1).default(3),
     PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS: z.coerce
       .number()
@@ -469,13 +458,15 @@ const resolvedRateLimit = {
     limit: parsedEnv.RATE_LIMIT_GLOBAL_LIMIT ?? rateLimitDefaults.global.limit,
     ttl: parsedEnv.RATE_LIMIT_GLOBAL_TTL_MS ?? rateLimitDefaults.global.ttl,
     blockDuration:
-      parsedEnv.RATE_LIMIT_GLOBAL_BLOCK_MS ?? rateLimitDefaults.global.blockDuration,
+      parsedEnv.RATE_LIMIT_GLOBAL_BLOCK_MS ??
+      rateLimitDefaults.global.blockDuration,
   },
   auth: {
     limit: parsedEnv.RATE_LIMIT_AUTH_LIMIT ?? rateLimitDefaults.auth.limit,
     ttl: parsedEnv.RATE_LIMIT_AUTH_TTL_MS ?? rateLimitDefaults.auth.ttl,
     blockDuration:
-      parsedEnv.RATE_LIMIT_AUTH_BLOCK_MS ?? rateLimitDefaults.auth.blockDuration,
+      parsedEnv.RATE_LIMIT_AUTH_BLOCK_MS ??
+      rateLimitDefaults.auth.blockDuration,
   },
   portfolioRead: {
     limit:
@@ -531,7 +522,11 @@ const requiredConfigSummary = [
   ['PORT', String(parsedEnv.PORT)],
 ] as const;
 
-const requiredSecretSummary = ['DB_PASSWORD', 'JWT_SECRET', 'STELLAR_SERVER_SECRET'];
+const requiredSecretSummary = [
+  'DB_PASSWORD',
+  'JWT_SECRET',
+  'STELLAR_SERVER_SECRET',
+];
 
 const optionalSummary = [
   ['NODE_ENV', parsedEnv.NODE_ENV],
@@ -542,42 +537,93 @@ const optionalSummary = [
   ['REDIS_URL', parsedEnv.REDIS_URL],
   ['CACHE_TTL_MS', String(parsedEnv.CACHE_TTL_MS)],
   ['RATE_LIMIT_TRACK_BY_IP', String(parsedEnv.RATE_LIMIT_TRACK_BY_IP)],
-  ['RATE_LIMIT_TRACK_BY_API_KEY', String(parsedEnv.RATE_LIMIT_TRACK_BY_API_KEY)],
+  [
+    'RATE_LIMIT_TRACK_BY_API_KEY',
+    String(parsedEnv.RATE_LIMIT_TRACK_BY_API_KEY),
+  ],
   ['RATE_LIMIT_API_KEY_HEADER', parsedEnv.RATE_LIMIT_API_KEY_HEADER],
   ['RATE_LIMIT_REDIS_URL', parsedEnv.RATE_LIMIT_REDIS_URL ?? '(not set)'],
   ['RATE_LIMIT_REDIS_NAMESPACE', parsedEnv.RATE_LIMIT_REDIS_NAMESPACE],
   ['RATE_LIMIT_GLOBAL_LIMIT', String(resolvedRateLimit.global.limit)],
   ['RATE_LIMIT_GLOBAL_TTL_MS', String(resolvedRateLimit.global.ttl)],
-  ['RATE_LIMIT_GLOBAL_BLOCK_MS', String(resolvedRateLimit.global.blockDuration)],
+  [
+    'RATE_LIMIT_GLOBAL_BLOCK_MS',
+    String(resolvedRateLimit.global.blockDuration),
+  ],
   ['RATE_LIMIT_AUTH_LIMIT', String(resolvedRateLimit.auth.limit)],
   ['RATE_LIMIT_AUTH_TTL_MS', String(resolvedRateLimit.auth.ttl)],
   ['RATE_LIMIT_AUTH_BLOCK_MS', String(resolvedRateLimit.auth.blockDuration)],
-  ['RATE_LIMIT_PORTFOLIO_READ_LIMIT', String(resolvedRateLimit.portfolioRead.limit)],
-  ['RATE_LIMIT_PORTFOLIO_READ_TTL_MS', String(resolvedRateLimit.portfolioRead.ttl)],
-  ['RATE_LIMIT_PORTFOLIO_READ_BLOCK_MS', String(resolvedRateLimit.portfolioRead.blockDuration)],
-  ['RATE_LIMIT_PORTFOLIO_WRITE_LIMIT', String(resolvedRateLimit.portfolioWrite.limit)],
-  ['RATE_LIMIT_PORTFOLIO_WRITE_TTL_MS', String(resolvedRateLimit.portfolioWrite.ttl)],
-  ['RATE_LIMIT_PORTFOLIO_WRITE_BLOCK_MS', String(resolvedRateLimit.portfolioWrite.blockDuration)],
-  ['RATE_LIMIT_WATCHLIST_READ_LIMIT', String(resolvedRateLimit.watchlistRead.limit)],
-  ['RATE_LIMIT_WATCHLIST_READ_TTL_MS', String(resolvedRateLimit.watchlistRead.ttl)],
-  ['RATE_LIMIT_WATCHLIST_READ_BLOCK_MS', String(resolvedRateLimit.watchlistRead.blockDuration)],
-  ['RATE_LIMIT_WATCHLIST_WRITE_LIMIT', String(resolvedRateLimit.watchlistWrite.limit)],
-  ['RATE_LIMIT_WATCHLIST_WRITE_TTL_MS', String(resolvedRateLimit.watchlistWrite.ttl)],
-  ['RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS', String(resolvedRateLimit.watchlistWrite.blockDuration)],
+  [
+    'RATE_LIMIT_PORTFOLIO_READ_LIMIT',
+    String(resolvedRateLimit.portfolioRead.limit),
+  ],
+  [
+    'RATE_LIMIT_PORTFOLIO_READ_TTL_MS',
+    String(resolvedRateLimit.portfolioRead.ttl),
+  ],
+  [
+    'RATE_LIMIT_PORTFOLIO_READ_BLOCK_MS',
+    String(resolvedRateLimit.portfolioRead.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_PORTFOLIO_WRITE_LIMIT',
+    String(resolvedRateLimit.portfolioWrite.limit),
+  ],
+  [
+    'RATE_LIMIT_PORTFOLIO_WRITE_TTL_MS',
+    String(resolvedRateLimit.portfolioWrite.ttl),
+  ],
+  [
+    'RATE_LIMIT_PORTFOLIO_WRITE_BLOCK_MS',
+    String(resolvedRateLimit.portfolioWrite.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_WATCHLIST_READ_LIMIT',
+    String(resolvedRateLimit.watchlistRead.limit),
+  ],
+  [
+    'RATE_LIMIT_WATCHLIST_READ_TTL_MS',
+    String(resolvedRateLimit.watchlistRead.ttl),
+  ],
+  [
+    'RATE_LIMIT_WATCHLIST_READ_BLOCK_MS',
+    String(resolvedRateLimit.watchlistRead.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_WATCHLIST_WRITE_LIMIT',
+    String(resolvedRateLimit.watchlistWrite.limit),
+  ],
+  [
+    'RATE_LIMIT_WATCHLIST_WRITE_TTL_MS',
+    String(resolvedRateLimit.watchlistWrite.ttl),
+  ],
+  [
+    'RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS',
+    String(resolvedRateLimit.watchlistWrite.blockDuration),
+  ],
   ['STELLAR_NETWORK', parsedEnv.STELLAR_NETWORK],
   ['STELLAR_HORIZON_URL', parsedEnv.STELLAR_HORIZON_URL ?? '(auto)'],
   ['STELLAR_TIMEOUT', String(parsedEnv.STELLAR_TIMEOUT)],
   ['STELLAR_RETRY_ATTEMPTS', String(parsedEnv.STELLAR_RETRY_ATTEMPTS)],
   ['STELLAR_RETRY_DELAY', String(parsedEnv.STELLAR_RETRY_DELAY)],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
-  ['PYTHON_SERVICE_URL', parsedEnv.PYTHON_SERVICE_URL ?? '(defaults to PYTHON_API_URL)'],
+  [
+    'PYTHON_SERVICE_URL',
+    parsedEnv.PYTHON_SERVICE_URL ?? '(defaults to PYTHON_API_URL)',
+  ],
   ['PYTHON_API_KEY', parsedEnv.PYTHON_API_KEY ? '[REDACTED]' : '(not set)'],
   ['COINDESK_API_KEY', parsedEnv.COINDESK_API_KEY ? '[REDACTED]' : '(not set)'],
   ['JWT_EXPIRES_IN', parsedEnv.JWT_EXPIRES_IN],
   ['DOMAIN', parsedEnv.DOMAIN],
   ['WEBHOOK_SECRET', parsedEnv.WEBHOOK_SECRET ? '[REDACTED]' : '(not set)'],
-  ['WEBHOOK_PROVIDERS', parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)'],
-  ['TELEGRAM_BOT_TOKEN', parsedEnv.TELEGRAM_BOT_TOKEN ? '[REDACTED]' : '(not set)'],
+  [
+    'WEBHOOK_PROVIDERS',
+    parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'TELEGRAM_BOT_TOKEN',
+    parsedEnv.TELEGRAM_BOT_TOKEN ? '[REDACTED]' : '(not set)',
+  ],
   ['METRICS_ALLOWED_IPS', parsedEnv.METRICS_ALLOWED_IPS ?? '(not set)'],
   ['USE_MOCK_TRANSACTIONS', String(parsedEnv.USE_MOCK_TRANSACTIONS)],
   ['LOGGING_ENABLED', String(parsedEnv.LOGGING_ENABLED)],
@@ -586,17 +632,41 @@ const optionalSummary = [
   ['LOGGING_INCLUDE_RESPONSE', String(parsedEnv.LOGGING_INCLUDE_RESPONSE)],
   ['LOGGING_INCLUDE_IP', String(parsedEnv.LOGGING_INCLUDE_IP)],
   ['LOGGING_INCLUDE_USER_AGENT', String(parsedEnv.LOGGING_INCLUDE_USER_AGENT)],
-  ['LOGGING_EXCLUDE_ROUTES', parsedEnv.LOGGING_EXCLUDE_ROUTES ?? '(default routes)'],
+  [
+    'LOGGING_EXCLUDE_ROUTES',
+    parsedEnv.LOGGING_EXCLUDE_ROUTES ?? '(default routes)',
+  ],
   ['AWS_BUCKET_NAME', parsedEnv.AWS_BUCKET_NAME ?? '(not set)'],
   ['AWS_REGION', parsedEnv.AWS_REGION ?? '(not set)'],
-  ['AWS_ACCESS_KEY_ID', parsedEnv.AWS_ACCESS_KEY_ID ? '[REDACTED]' : '(not set)'],
-  ['AWS_SECRET_ACCESS_KEY', parsedEnv.AWS_SECRET_ACCESS_KEY ? '[REDACTED]' : '(not set)'],
+  [
+    'AWS_ACCESS_KEY_ID',
+    parsedEnv.AWS_ACCESS_KEY_ID ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'AWS_SECRET_ACCESS_KEY',
+    parsedEnv.AWS_SECRET_ACCESS_KEY ? '[REDACTED]' : '(not set)',
+  ],
   ['FRONTEND_URL', parsedEnv.FRONTEND_URL],
-  ['PORTFOLIO_SNAPSHOT_CONCURRENCY', String(parsedEnv.PORTFOLIO_SNAPSHOT_CONCURRENCY)],
-  ['PORTFOLIO_SNAPSHOT_BATCH_SIZE', String(parsedEnv.PORTFOLIO_SNAPSHOT_BATCH_SIZE)],
-  ['PORTFOLIO_SNAPSHOT_ATTEMPTS', String(parsedEnv.PORTFOLIO_SNAPSHOT_ATTEMPTS)],
-  ['PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS', String(parsedEnv.PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS)],
-  ['PORTFOLIO_SNAPSHOT_QUEUE_METRICS', String(parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS)],
+  [
+    'PORTFOLIO_SNAPSHOT_CONCURRENCY',
+    String(parsedEnv.PORTFOLIO_SNAPSHOT_CONCURRENCY),
+  ],
+  [
+    'PORTFOLIO_SNAPSHOT_BATCH_SIZE',
+    String(parsedEnv.PORTFOLIO_SNAPSHOT_BATCH_SIZE),
+  ],
+  [
+    'PORTFOLIO_SNAPSHOT_ATTEMPTS',
+    String(parsedEnv.PORTFOLIO_SNAPSHOT_ATTEMPTS),
+  ],
+  [
+    'PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS',
+    String(parsedEnv.PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS),
+  ],
+  [
+    'PORTFOLIO_SNAPSHOT_QUEUE_METRICS',
+    String(parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS),
+  ],
 ] as const;
 
 const wasDefaulted = (key: string): boolean => {
@@ -651,7 +721,8 @@ export const resolveCorsOrigin = (): string | string[] => {
   }
 
   if (Array.isArray(config.corsOrigin)) {
-    return [...config.corsOrigin];
+    const origins = config.corsOrigin as readonly string[];
+    return origins.slice();
   }
   return config.corsOrigin as string;
 };
@@ -661,7 +732,9 @@ export const config = Object.freeze({
   environment: parsedEnv.ENVIRONMENT,
   port: parsedEnv.PORT,
   corsOrigin: Object.freeze(
-    resolvedCorsOrigin.length === 1 ? resolvedCorsOrigin[0] : resolvedCorsOrigin,
+    resolvedCorsOrigin.length === 1
+      ? resolvedCorsOrigin[0]
+      : resolvedCorsOrigin,
   ),
   database: Object.freeze({
     host: parsedEnv.DB_HOST,
@@ -680,9 +753,7 @@ export const config = Object.freeze({
     network: parsedEnv.STELLAR_NETWORK,
     horizonUrl:
       parsedEnv.STELLAR_HORIZON_URL ||
-      defaultHorizonUrls[
-        parsedEnv.STELLAR_NETWORK as keyof typeof defaultHorizonUrls
-      ],
+      defaultHorizonUrls[parsedEnv.STELLAR_NETWORK],
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
