@@ -23,6 +23,7 @@ import { QueueModule } from './queue/queue.module';
 import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
 import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
+import { ModerationModule } from './moderation/moderation.module';
 
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
@@ -106,6 +107,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
     WatchlistModule,
     OutboxModule,
     TelegramBotModule,
+    ModerationModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
